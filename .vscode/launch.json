@@ -1,0 +1,23 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: TorchRun",
+            "type": "python",
+            "request": "launch",
+            "module": "torch.distributed.run",
+            "args":[
+                "--nnodes=1",
+                "--node_rank=0",
+                "--nproc_per_node=1",
+                "classification/main.py",
+                "--cfg=classification/configs/vssm/vmambav2v_tiny_224_BP4D_test.yaml",
+                "--model_ema=False",
+                "--pretrained=classification/pretrain_weights/vssm1_tiny_0230s_ckpt_epoch_264.pth",
+                "--launcher=pytorch"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}

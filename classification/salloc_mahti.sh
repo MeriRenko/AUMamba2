@@ -1,0 +1,1 @@
+salloc --job-name=code_test --account=project_2006419 --partition=gpusmall --time=02:00:00 --nodes=1 --gres=gpu:a100:1 --cpus-per-task=16 --mem=32G

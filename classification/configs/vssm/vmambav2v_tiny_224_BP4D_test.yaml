@@ -1,0 +1,52 @@
+MODEL:
+  TYPE: vssm
+  NAME: vssm1_tiny_0230s
+  DROP_PATH_RATE: 0.2
+  NUM_CLASSES: 12
+  IS_PRETRAIN: True
+  VSSM:
+    EMBED_DIM: 96
+    DEPTHS: [ 2, 2, 8, 2 ] #[ 2, 2, 8, 2 ]
+    SSM_D_STATE: 1
+    SSM_DT_RANK: "auto"
+    SSM_RATIO: 1.0
+    SSM_CONV: 3
+    SSM_CONV_BIAS: false
+    SSM_FORWARDTYPE: "v05_noz" # v3_noz
+    MLP_RATIO: 4.0
+    DOWNSAMPLE: "v3"
+    PATCHEMBED: "v2"
+    NORM_LAYER: "ln2d"
+    POSEMBED: False
+    SCAN: "hilbert"
+DATA:
+  DATASET: "BP4D"
+  TRAIN_PATH_PREFIX: "/root/media_ssd/ssd/dataset/BP4D_combine_1_3"
+  TEST_PATH_PREFIX: "/root/media_ssd/ssd/dataset/BP4D_part2"
+  BATCH_SIZE: 128
+  NUM_WORKERS: 8
+  IMG_SIZE: 256
+TRAIN:
+  EPOCHS: 20
+  WARMUP_EPOCHS: 10
+  LOSS_TYPE: "wa+dice"
+  MARGIN_WA_LOSS: 0.1
+  GAMA_WA_LOSS: "_1.0_2.0"
+  BASE_LR: 8e-3
+  ACCUMULATION_STEPS: 1
+TEST:
+  CROP: False
+AUG: 
+  MIXUP: 0.8
+  MIXUP_PROB: 1.0
+  CUTMIX: 0.
+  CUTMIX_MINMAX: None
+  AUTO_AUGMENT: 'rand-m9-mstd0.5-inc1'
+  COLOR_JITTER: 0.4
+  REPROB: 0.25
+  REMODE: 'pixel'
+  RECOUNT: 1
+  MIXUP_SWITCH_PROB: 0.5
+  MIXUP_MODE: 'batch'
+
+

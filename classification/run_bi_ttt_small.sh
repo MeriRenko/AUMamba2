@@ -1,0 +1,3 @@
+python -m torch.distributed.launch --nnodes=1 --node_rank=0 --nproc_per_node=1 --master_addr="127.0.0.1" --master_port=29501 main.py --cfg configs/bi_ttt/bi_vttt_small_224_BP4D_cross.yaml --model_ema False --tag bp4d_disfa_23for1_cross --pretrained output/bi_vttt_small_nd/disfa_23for1_h6_m14_2waycat_passconv_219_ft_mixup_bp4d/ckpt_epoch_15.pth
+
+# output/bi_vttt_small_nd/disfa_23for1_h6_m14_2waycat_passconv_219_ft_mixup/ckpt_epoch_18.pth

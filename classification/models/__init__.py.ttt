@@ -1,0 +1,5 @@
+from .bi_ttt_vit import vit_base_patch16_224, vit_tiny_patch16_224, vit_small_patch16_224
+
+def build_model(config, is_pretrain=True):
+    model = vit_small_patch16_224(pretrained=is_pretrain, au_num=config.MODEL.NUM_CLASSES, drop_path_rate=config.MODEL.DROP_PATH_RATE)
+    return model

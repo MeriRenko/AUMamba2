@@ -1,0 +1,24 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: torchrun",
+            "type": "python",
+            "request": "launch",
+            "module": "torch.distributed.run",
+            // 设置 torchrun 命令的参数
+            "args":[
+                "--nproc_per_node=1",
+                "--nnodes=1",
+                "--master_addr=127.0.0.1",
+                "--master_port=29501",
+                "/root/media_ssd/ssd/AUTTT/classification/main.py",
+                "--cfg=configs/vssm/vmambav2v_tiny_224_BP4D_13for2.yaml",
+                "--pretrained=pretrain_weights/vssm1_tiny_0230s_ckpt_epoch_264.pth",
+                "--model_ema=False"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}

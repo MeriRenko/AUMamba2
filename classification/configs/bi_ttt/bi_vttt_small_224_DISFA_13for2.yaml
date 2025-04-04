@@ -1,0 +1,35 @@
+MODEL:
+  TYPE: vttt
+  NAME: bi_vttt_small_nd
+  DROP_PATH_RATE: 0.2
+  NUM_CLASSES: 8
+  IS_PRETRAIN: True
+  VSSM:
+    EMBED_DIM: 96
+    DEPTHS: [ 2, 2, 8, 2 ]
+    SSM_D_STATE: 1
+    SSM_DT_RANK: "auto"
+    SSM_RATIO: 1.0
+    SSM_CONV: 3
+    SSM_CONV_BIAS: false
+    SSM_FORWARDTYPE: "v05_noz" # v3_noz
+    MLP_RATIO: 4.0
+    DOWNSAMPLE: "v3"
+    PATCHEMBED: "v2"
+    NORM_LAYER: "ln2d"
+DATA:
+  DATASET: "DISFA"
+  TRAIN_PATH_PREFIX: "dataset/AUFormer/list/DISFA_combine_1_3"
+  TEST_PATH_PREFIX: "dataset/AUFormer/list/DISFA_part2"
+  BATCH_SIZE: 128
+TRAIN:
+  EPOCHS: 20
+  WARMUP_EPOCHS: 10
+  LOSS_TYPE: "wa+dice"
+  MARGIN_WA_LOSS: 0.1
+  GAMA_WA_LOSS: "_1.0_2.0"
+  BASE_LR: 8e-3
+  ACCUMULATION_STEPS: 1
+AUG: 
+  MIXUP: 0.8
+  CUTMIX: 0.

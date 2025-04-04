@@ -1,0 +1,106 @@
+import torch
+from timm.utils import accuracy, AverageMeter
+import time
+import numpy as np
+from sklearn.metrics import accuracy_score, f1_score
+import logging
+from data_list import heatmap2au
+
+BP4D2DISFA={0:0,
+    1:1,
+    2:2,
+    3:3,
+    5:6,
+    }
+
+DISFA2BP4D={0:0,
+    1:1,
+    2:2,
+    3:3,
+    6:5,
+    }
+
+def map_bp4d_to_disfa(key):
+    return BP4D2DISFA.get(key, key)
+
+def map_disfa_to_bp4d(key):
+    return DISFA2BP4D.get(key, key)
+
+@torch.no_grad()
+def AU_detection_evalv2(config, data_loader, model):
+    model.eval()
+    logger = logging.getLogger(f"{config.MODEL.NAME}")
+
+    batch_time = AverageMeter()
+    end = time.time()
+
+    missing_label = 9
+    for idx, (images, land, biocular, target, heatmap) in enumerate(data_loader):
+        images = images.cuda(non_blocking=True)
+        target = target.cuda(non_blocking=True)
+
+        # compute output
+        with torch.cuda.amp.autocast(enabled=config.AMP_ENABLE):
+            output = model(images)
+
+        output = torch.sigmoid(output)
+        # heatmap_pred = heatmap2au(heatmap_pred)
+
+        if idx == 0:
+            all_output = output.data.cpu().float()
+            # all_heatmap_pred = heatmap_pred.data.cpu()
+            all_au = target.data.cpu().float()
+        else:
+            all_output = torch.cat((all_output, output.data.cpu().float()), 0)
+            # all_heatmap_pred = torch.cat((all_heatmap_pred, heatmap_pred.data.cpu()), 0)
+            all_au = torch.cat((all_au, target.data.cpu().float()), 0)
+
+
+        batch_time.update(time.time() - end)
+        end = time.time()
+
+        if idx % config.PRINT_FREQ == 0:
+            memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
+            logger.info(
+                f'Test: [{idx}/{len(data_loader)}]\t'
+                f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                f'Mem {memory_used:.0f}MB')
+
+    AUoccur_pred_prob = all_output.data.numpy()
+    AUoccur_actual = all_au.data.numpy()
+    # AUoccur_all_heatmap_pred = all_heatmap_pred.data.numpy()
+
+    # AUs
+    AUoccur_pred = np.zeros(AUoccur_pred_prob.shape)
+    AUoccur_pred[AUoccur_pred_prob < 0.5] = 0
+    AUoccur_pred[AUoccur_pred_prob >= 0.5] = 1
+    # AUoccur_pred = np.logical_or(AUoccur_pred, AUoccur_all_heatmap_pred).astype(int)
+
+    AUoccur_actual = AUoccur_actual.transpose((1, 0))
+    AUoccur_pred = AUoccur_pred.transpose((1, 0))
+
+    f1score_arr = np.zeros(AUoccur_actual.shape[0])
+    acc_arr = np.zeros(AUoccur_actual.shape[0])
+    for i in range(min(AUoccur_actual.shape[0], AUoccur_pred.shape[0])):
+        """
+        BP4D: 0, 1, 2, 3, 6
+        DISFA: 0, 1, 2, 3, 5
+        """
+        curr_actual = AUoccur_actual[i]
+        curr_pred = AUoccur_pred[map_disfa_to_bp4d(i)]
+
+        new_curr_actual = curr_actual[curr_actual != missing_label]
+        new_curr_pred = curr_pred[curr_actual != missing_label]
+
+        f1score_arr[i] = f1_score(new_curr_actual, new_curr_pred)
+        acc_arr[i] = accuracy_score(new_curr_actual, new_curr_pred)
+    
+    logger.info("Final Evaluation Metrics:")
+    logger.info(f'Final F1 Scores for each AU: {" ".join([f"{f1_meter:.3f}" for f1_meter in f1score_arr])}')
+    logger.info(f'Final F1 Scores for all AU: {f1score_arr.mean()}')
+    logger.info(f'Final Accuracy for all AU: {acc_arr.mean()}')
+    
+    f1score_arr = f1score_arr.mean() * 100
+    acc_arr = acc_arr.mean() * 100
+
+    return f1score_arr, acc_arr, None
