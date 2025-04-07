@@ -132,8 +132,7 @@ def main(config, args):
     dist.barrier(device_ids=[local_rank])
 
     # 确保模型在 GPU 上运行
-    torch.cuda.set_device(local_rank)
-    model = model.to(local_rank)
+    model = model.cuda()
     # model.cuda()
     model_without_ddp = model
 
@@ -153,7 +152,7 @@ def main(config, args):
     optimizer = build_optimizer(config, model, logger, args=args)
     # model = torch.nn.parallel.DistributedDataParallel(model, broadcast_buffers=False, find_unused_parameters=True)
     # broadcast_buffers=False 避免在不同 GPU 之间同步无用的 buffer，提高效率。
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank],output_device=local_rank,broadcast_buffers=False)
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank],output_device=local_rank,broadcast_buffers=False,find_unused_parameters=True)
     
     # NativeScalerWithGradNormCount() 是 AMP（混合精度训练） 的梯度缩放器，能防止浮点溢出，提高训练稳定性。
     loss_scaler = NativeScalerWithGradNormCount()

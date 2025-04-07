@@ -20,7 +20,7 @@ def AU_detection_evalv2(config, data_loader, model):
         target = target.cuda(non_blocking=True)
 
         # compute output
-        with torch.cuda.amp.autocast(enabled=config.AMP_ENABLE):
+        with torch.amp.autocast('cuda',enabled=config.AMP_ENABLE):
             output = model(images)                  # 前向传播，获取 AU 预测结果
 
         output = torch.sigmoid(output)              # 将输出转换到 [0,1] 之间，适用于 二分类任务（是否激活某个 AU）

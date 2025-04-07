@@ -31,6 +31,57 @@ def hilbert_curve(order, size):
     indices = points[:, 0] * size + points[:, 1]
     return indices
 
+def diagonal_indices(H, W,reverse=False):
+    """
+    获取斜向扫描索引，从左上到右下（或右上到左下）。
+    Args:
+        H, W: 高和宽
+        reverse: 是否反向（右上到左下）
+    Returns:
+        indices: (H * W,) 形状的 1D 索引张量
+    """
+    indices = []
+    if not reverse:
+        for s in range(H + W - 1):  # 所有斜线编号
+            temp = []
+            for i in range(H):
+                j = s - i
+                if 0 <= j < W:
+                    temp.append(i * W + j)
+            if s % 2 == 0:      #连续式扫描，如果没有的话，便是z形状的
+                 temp.reverse()
+            indices.extend(temp)
+    else:
+        for s in range(H + W - 1):  # 所有斜线编号
+            temp = []
+            for i in range(H):
+                j = s - (H - 1 - i)
+                if 0 <= j < W:
+                    temp.append(i * W + j)
+            if s % 2 == 0:
+                 temp.reverse()  # 锯齿式可选
+            indices.extend(temp)
+    return torch.tensor(indices, dtype=torch.long)
+
+def continuous_indices(H, W):
+    """
+    获取斜向扫描索引，从左上到右下（或右上到左下）。
+    Args:
+        H, W: 高和宽
+        reverse: 是否反向（右上到左下）
+    Returns:
+        indices: (H * W,) 形状的 1D 索引张量
+    """
+    indices = []
+    for i in range(H):
+        if i%2==0:
+            for j in range(W):
+                indices.append(i*W+j)
+        else:
+            for j in range(W - 1, -1, -1):
+                indices.append(i*W+j)
+    return torch.tensor(indices, dtype=torch.long)
+
 
 # torch implementation ========================================
 def scan_fwd(x: torch.Tensor, in_channel_first=True, out_channel_first=True, scans=0):
@@ -73,7 +124,35 @@ def scan_fwd(x: torch.Tensor, in_channel_first=True, out_channel_first=True, sca
         # 释放无用变量
         del x_flat, x_flat_trans,x_hilbert, x_hilbert_trans,indices
         torch.cuda.empty_cache()  # 手动清理 CUDA 缓存
+    elif scans == 4:
+        # 假设输入 x: (B, C, H, W)
+        x_flat = x.flatten(2, 3)  # 展平为 (B, C, H*W)
+        diag_idx = diagonal_indices(H, W)  # 左上到右下扫描
+        anti_diag_idx=diagonal_indices(H, W,reverse=True)
 
+        y = x.new_empty((B, 4, C, H * W))
+        y[:, 0, :, :] = x_flat[:, :, diag_idx]       # 斜向扫描
+        y[:, 1, :, :] = x_flat[:, :, anti_diag_idx]  # 反斜向扫描
+        y[:, 2, :, :] = torch.flip(y[:, 0, :, :], dims=[-1])  # 反转版本
+        y[:, 3, :, :] = torch.flip(y[:, 1, :, :], dims=[-1])  # 反转版本
+        # 释放无用变量
+        del x_flat, diag_idx, anti_diag_idx
+        torch.cuda.empty_cache()  # 手动清理 CUDA 缓存
+
+    elif scans == 5:
+        # 假设输入 x: (B, C, H, W)
+        x_flat = x.flatten(2, 3)  # 展平为 (B, C, H*W)
+        x_flat_trans = x.transpose(dim0=2, dim1=3).flatten(2, 3)  # 将 x 展平
+        continuous_idx = continuous_indices(H, W) # 左上到右下扫描
+
+        y = x.new_empty((B, 4, C, H * W))
+        y[:, 0, :, :] = x_flat[:, :, continuous_idx]       # 斜向扫描
+        y[:, 1, :, :] = x_flat_trans[:, :, continuous_idx]  # 反斜向扫描
+        y[:, 2, :, :] = torch.flip(y[:, 0, :, :], dims=[-1])  # 反转版本
+        y[:, 3, :, :] = torch.flip(y[:, 1, :, :], dims=[-1])  # 反转版本
+        # 释放无用变量
+        del x_flat, x_flat_trans, continuous_idx
+        torch.cuda.empty_cache()  # 手动清理 CUDA 缓存
 
     if in_channel_first and (not out_channel_first):
         y = y.permute(0, 3, 1, 2).contiguous()
@@ -102,7 +181,13 @@ def merge_fwd(y: torch.Tensor, in_channel_first=True, out_channel_first=True, sc
         # y = y.sum(1)
         y = y[:, 0:2] + y[:, 2:4].flip(dims=[-1]).view(B, 2, D, -1)
         y = y[:, 0] + y[:, 1].view(B, -1, W, H).transpose(dim0=2, dim1=3).contiguous().view(B, D, -1)
-
+    elif scans == 4:
+        # y[:, 0:2]：这里我们选择了 y 的第 0 到第 1 个 K 的部分，形状为 (B, 2, D, H * W)
+        y = y[:, 0:2] + y[:, 2:4].flip(dims=[-1]).view(B, 2, D, -1)
+        y = y[:, 0] + y[:, 1].view(B, -1, W, H).transpose(dim0=2, dim1=3).flip(dims=[-1]).contiguous().view(B, D, -1)
+    elif scans == 5:
+        y = y[:, 0:2] + y[:, 2:4].flip(dims=[-1]).view(B, 2, D, -1)
+        y = y[:, 0] + y[:, 1].view(B, -1, W, H).transpose(dim0=2, dim1=3).contiguous().view(B, D, -1)
 
     if in_channel_first and (not out_channel_first):
         y = y.permute(0, 2, 1).contiguous()
@@ -562,7 +647,7 @@ def scan_fn(x: torch.Tensor, in_channel_first=True, out_channel_first=True, one_
     # x: (B, C, H, W) | (B, H, W, C) | (B, 4, C, H, W) | (B, H, W, 4, C)
     # y: (B, 4, C, L) | (B, L, 4, C)
     # scans: 0: cross scan; 1 unidirectional; 2: bidirectional;
-    WITH_TRITON=False
+    # WITH_TRITON=False
     CSF = CrossScanTritonF if WITH_TRITON and x.is_cuda and (not force_torch) else ScanF  #CrossScanTritonF
     with torch.cuda.device(x.device):
         return CSF.apply(x, in_channel_first, out_channel_first, one_by_one, scans)
@@ -573,7 +658,7 @@ def merge_fn(y: torch.Tensor, in_channel_first=True, out_channel_first=True, one
     # y: (B, 4, C, L) | (B, L, 4, C)
     # x: (B, C, H * W) | (B, H * W, C) | (B, 4, C, H * W) | (B, H * W, 4, C)
     # scans: 0: cross scan; 1 unidirectional; 2: bidirectional;
-    WITH_TRITON=False
+    # WITH_TRITON=False
     CMF = CrossMergeTritonF if WITH_TRITON and y.is_cuda and (not force_torch) else MergeF
     with torch.cuda.device(y.device):
         return CMF.apply(y, in_channel_first, out_channel_first, one_by_one, scans)

@@ -18,12 +18,12 @@ MODEL:
     PATCHEMBED: "v2"
     NORM_LAYER: "ln2d"
     POSEMBED: False
-    SCAN: "hilbert"
+    SCAN: "cross2d"
 DATA:
   DATASET: "BP4D"
   TRAIN_PATH_PREFIX: "/root/media_ssd/ssd/dataset/BP4D_combine_1_2"
   TEST_PATH_PREFIX: "/root/media_ssd/ssd/dataset/BP4D_part3"
-  BATCH_SIZE: 128
+  BATCH_SIZE: 32
   NUM_WORKERS: 8
   IMG_SIZE: 256
 TRAIN:

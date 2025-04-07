@@ -1,1 +1,1 @@
-OMP_NUM_THREADS=3 torchrun --standalone --nnodes=1 --nproc_per_node=4 main.py --use_wandb --cfg configs/vssm/vmambav2v_tiny_224_BP4D_13for2.yaml --model_ema False --pretrained pretrain_weights/vssm1_tiny_0230s_ckpt_epoch_264.pth
+OMP_NUM_THREADS=4 torchrun --standalone --nnodes=1 --nproc_per_node=4 main.py --use_wandb --cfg configs/vssm/vmambav2v_tiny_224_BP4D_13for2.yaml --model_ema False --pretrained pretrain_weights/vssm1_tiny_0230s_ckpt_epoch_264.pth

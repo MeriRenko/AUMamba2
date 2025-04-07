@@ -514,7 +514,6 @@ class SS2Dv2:
                 # 用于扩展 Conv2d 构造函数的额外参数，如激活函数、正则化等
                 **factory_kwargs,
             )
-
         # x proj ============================
         # 这里创建了 k_group 个 Linear 变换，每个变换输入维度：self.d_inner，输出维度：self.dt_rank + self.d_state * 2
         self.x_proj = [
@@ -563,7 +562,7 @@ class SS2Dv2:
         # ==============================
         selective_scan_backend = None,
         # ==============================
-        scan_mode = "hilbert",
+        scan_mode = "continuous",
         scan_force_torch = False,   # 决定是否强制使用 PyTorch 来执行扫描操作。
         # ==============================
         **kwargs,
@@ -571,7 +570,7 @@ class SS2Dv2:
         # 使用 assert 语句检查 selective_scan_backend 是否为合法的选项
         assert selective_scan_backend in [None, "oflex", "mamba", "torch"]
         # 解析 scan_mode 为整数值 _scan_mode，并且确保它是有效的
-        _scan_mode = dict(cross2d=0, unidi=1, bidi=2, hilbert=3,cascade2d=-1).get(scan_mode, None) if isinstance(scan_mode, str) else scan_mode # for debug
+        _scan_mode = dict(cross2d=0, unidi=1, bidi=2, hilbert=3,diagonal=4,continuous=5,cascade2d=-1).get(scan_mode, None) if isinstance(scan_mode, str) else scan_mode # for debug
         assert isinstance(_scan_mode, int)
         delta_softplus = True
         out_norm = self.out_norm # LayerNorm2d((96,), eps=1e-05, elementwise_affine=True)
@@ -725,11 +724,12 @@ class SS2Dv2:
         y = y.view(B, -1, H, W)
         if not channel_first:
             y = y.view(B, -1, H * W).transpose(dim0=1, dim1=2).contiguous().view(B, H, W, -1) # (B, L, C)
-        y = out_norm(y)
+        # y = out_norm(y)
 
         return y.to(x.dtype)
 
     def forwardv2(self, x: torch.Tensor, **kwargs):
+
         # 通道由d_model变成d_inner，其他大小不变，Linear2D
         # x[1, 96, 56, 56])
         x = self.in_proj(x)             # (b, d_inner, w, d)   
@@ -744,6 +744,7 @@ class SS2Dv2:
         x = self.act(x)        # SiLU
         y = self.forward_core(x)
         y = self.out_act(y)    # nn.Identity()
+        y = self.out_norm(y)   # LN
         if not self.disable_z:
             y = y * z
         # 通道由d_inner变成d_model，其他大小不变，Linear2D

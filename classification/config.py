@@ -56,6 +56,7 @@ _C.MODEL = CN()
 _C.MODEL.TYPE = 'vssm'
 # Model name
 _C.MODEL.NAME = 'vssm_tiny_224'
+_C.MODEL.TAG = 'SS2D旁边直接残差分支'
 # Pretrained weight from checkpoint, could be imagenet22k pretrained weight
 # could be overwritten by command line argument
 _C.MODEL.PRETRAINED = ''
@@ -100,7 +101,7 @@ _C.MODEL.VSSM.DOWNSAMPLE = "v2"
 _C.MODEL.VSSM.PATCHEMBED = "v2"
 _C.MODEL.VSSM.POSEMBED = False
 _C.MODEL.VSSM.GMLP = False
-_C.MODEL.VSSM.SCAN = "hilbert"
+_C.MODEL.VSSM.SCAN = "cross2d"
 # -----------------------------------------------------------------------------
 # Training settings
 # -----------------------------------------------------------------------------
