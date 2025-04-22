@@ -28,7 +28,7 @@ _C.DATA.DATA_PATH = ''
 _C.DATA.TRAIN_PATH_PREFIX = ''
 _C.DATA.TEST_PATH_PREFIX = ''
 # Dataset name
-_C.DATA.DATASET = 'BP4D'
+_C.DATA.DATASET = 'imagenet'
 # Input image size
 _C.DATA.IMG_SIZE = 224
 # Interpolation to resize image (random, bilinear, bicubic)
@@ -48,6 +48,8 @@ _C.DATA.MASK_PATCH_SIZE = 32
 # [SimMIM] Mask ratio for MaskGenerator
 _C.DATA.MASK_RATIO = 0.6
 
+# REIMG_SIZE
+_C.DATA.REIMG_SIZE = 224
 # -----------------------------------------------------------------------------
 # Model settings
 # -----------------------------------------------------------------------------

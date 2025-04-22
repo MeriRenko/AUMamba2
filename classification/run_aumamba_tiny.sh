@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=2,3 OMP_NUM_THREADS=3 torchrun --standalone --nnodes=1 --nproc_per_node=2 main.py --use_wandb --tag "20250414101409" --cfg configs/vssm/vmambav2v_tiny_224.yaml

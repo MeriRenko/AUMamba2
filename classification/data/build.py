@@ -185,7 +185,7 @@ def build_transform(is_train, config):
     if is_train:
         #使用 create_transform 创建包含随机裁剪、颜色抖动等增强的组合
         transform = create_transform(
-            input_size=config.DATA.IMG_SIZE,
+            input_size=config.DATA.REIMG_SIZE,
             is_training=True,
             # hflip=0.5,
             # vflip=0.,   # 50% 水平翻转0% 垂直翻转
@@ -216,7 +216,7 @@ def build_transform(is_train, config):
         # 直接缩放模式
         else:
             t.append(
-                transforms.Resize((config.DATA.IMG_SIZE, config.DATA.IMG_SIZE),
+                transforms.Resize((config.DATA.IMG_SIZE, config.DATA.REIMG_SIZE),
                                   interpolation=_pil_interp(config.DATA.INTERPOLATION))
             )
     # 转为张量并归一化到 [0,1]

@@ -538,6 +538,10 @@ class SS2Dv2:
             self.A_logs, self.Ds, self.dt_projs_weight, self.dt_projs_bias = mamba_init.init_dt_A_D(
                 self.d_state, self.dt_rank, self.d_inner, dt_scale, dt_init, dt_min, dt_max, dt_init_floor, k_group=self.k_group,
             )
+            # self.A1_logs=self.A_logs
+            # self.Ds1=self.Ds
+            # self.dt1_projs_weight=self.dt_projs_weight
+            # self.dt1_projs_bias=self.dt_projs_bias
         elif initialize in ["v1"]:
             # simple init dt_projs, A_logs, Ds
             self.Ds = nn.Parameter(torch.ones((self.k_group * self.d_inner)))
@@ -724,9 +728,186 @@ class SS2Dv2:
         y = y.view(B, -1, H, W)
         if not channel_first:
             y = y.view(B, -1, H * W).transpose(dim0=1, dim1=2).contiguous().view(B, H, W, -1) # (B, L, C)
-        # y = out_norm(y)
+        y = out_norm(y)
 
         return y.to(x.dtype)
+    
+    # def forward_core1(
+    #     self,
+    #     x: torch.Tensor=None, 
+    #     # ==============================
+    #     force_fp32=False, # True: input fp32                                        # 当其为 True 时，强制将输入数据转换为 float32 类型。
+    #     # ==============================
+    #     ssoflex=True, # True: input 16 or 32 output 32 False: output dtype as input
+    #     no_einsum=False, # replace einsum with linear or conv1d to raise throughput # 表示是否禁用 einsum（爱因斯坦求和约定）。
+    #     # ==============================
+    #     selective_scan_backend = None,
+    #     # ==============================
+    #     scan_mode = "cross2d",
+    #     scan_force_torch = False,   # 决定是否强制使用 PyTorch 来执行扫描操作。
+    #     # ==============================
+    #     **kwargs,
+    # ):
+    #     # 使用 assert 语句检查 selective_scan_backend 是否为合法的选项
+    #     assert selective_scan_backend in [None, "oflex", "mamba", "torch"]
+    #     # 解析 scan_mode 为整数值 _scan_mode，并且确保它是有效的
+    #     _scan_mode = dict(cross2d=0, unidi=1, bidi=2, hilbert=3,diagonal=4,continuous=5,cascade2d=-1).get(scan_mode, None) if isinstance(scan_mode, str) else scan_mode # for debug
+    #     assert isinstance(_scan_mode, int)
+    #     delta_softplus = True
+    #     out_norm = self.out_norm # LayerNorm2d((96,), eps=1e-05, elementwise_affine=True)
+    #     channel_first = self.channel_first
+    #     # lambda 函数 to_fp32，它的作用是将输入的多个张量转换为 torch.float32 数据类型
+    #     # for _a in args 会遍历 args 中的每个元素（即每个张量）
+    #     # _a.to(torch.float32) 会将张量 _a 转换为 torch.float32 类型
+    #     to_fp32 = lambda *args: (_a.to(torch.float32) for _a in args)
+
+    #     B, D, H, W = x.shape
+    #     N = self.d_state
+    #     K, D, R = self.k_group, self.d_inner, self.dt_rank
+    #     L = H * W
+
+    #     def selective_scan(u, delta, A, B, C, D=None, delta_bias=None, delta_softplus=True):
+    #         return selective_scan_fn(u, delta, A, B, C, D, delta_bias, delta_softplus, ssoflex, backend=selective_scan_backend)
+        
+    #     if _scan_mode == -1:
+    #         # 该行代码尝试从当前对象（通常是神经网络的模型）中获取 x_proj_bias 属性。如果该属性不存在，则返回 None。x_proj_bias 通常是一个偏置项，用于项目权重的计算
+    #         x_proj_bias = getattr(self, "x_proj_bias", None)
+    #         def scan_rowcol(
+    #             x: torch.Tensor, 
+    #             proj_weight: torch.Tensor, 
+    #             proj_bias: torch.Tensor, 
+    #             dt_weight: torch.Tensor, 
+    #             dt_bias: torch.Tensor, # (2*c)
+    #             _As: torch.Tensor, # As = -torch.exp(A_logs.to(torch.float))[:2,] # (2*c, d_state)
+    #             _Ds: torch.Tensor,
+    #             width = True,
+    #         ):
+    #             # x: (B, D, H, W)
+    #             # proj_weight: (2 * D, (R+N+N))
+    #             XB, XD, XH, XW = x.shape
+    #             if width:
+    #                 _B, _D, _L = XB * XH, XD, XW
+    #                 xs = x.permute(0, 2, 1, 3).contiguous()
+    #             else:
+    #                 _B, _D, _L = XB * XW, XD, XH
+    #                 xs = x.permute(0, 3, 1, 2).contiguous()
+    #             xs = torch.stack([xs, xs.flip(dims=[-1])], dim=2) # (B, H, 2, D, W)
+    #             if no_einsum:
+    #                 x_dbl = F.conv1d(xs.view(_B, -1, _L), proj_weight.view(-1, _D, 1), bias=(proj_bias.view(-1) if proj_bias is not None else None), groups=2)
+    #                 dts, Bs, Cs = torch.split(x_dbl.view(_B, 2, -1, _L), [R, N, N], dim=2)
+    #                 dts = F.conv1d(dts.contiguous().view(_B, -1, _L), dt_weight.view(2 * _D, -1, 1), groups=2)
+    #             else:
+    #                 x_dbl = torch.einsum("b k d l, k c d -> b k c l", xs, proj_weight)
+    #                 if x_proj_bias is not None:
+    #                     x_dbl = x_dbl + x_proj_bias.view(1, 2, -1, 1)
+    #                 dts, Bs, Cs = torch.split(x_dbl, [R, N, N], dim=2)
+    #                 dts = torch.einsum("b k r l, k d r -> b k d l", dts, dt_weight)
+
+    #             xs = xs.view(_B, -1, _L)
+    #             dts = dts.contiguous().view(_B, -1, _L)
+    #             As = _As.view(-1, N).to(torch.float)
+    #             Bs = Bs.contiguous().view(_B, 2, N, _L)
+    #             Cs = Cs.contiguous().view(_B, 2, N, _L)
+    #             Ds = _Ds.view(-1)
+    #             delta_bias = dt_bias.view(-1).to(torch.float)
+
+    #             if force_fp32:
+    #                 xs = xs.to(torch.float)
+    #             dts = dts.to(xs.dtype)
+    #             Bs = Bs.to(xs.dtype)
+    #             Cs = Cs.to(xs.dtype)
+
+    #             ys: torch.Tensor = selective_scan(
+    #                 xs, dts, As, Bs, Cs, Ds, delta_bias, delta_softplus
+    #             ).view(_B, 2, -1, _L)
+    #             return ys
+            
+    #         As = -self.A_logs.to(torch.float).exp().view(4, -1, N)
+    #         x = F.layer_norm(x.permute(0, 2, 3, 1), normalized_shape=(int(x.shape[1]),)).permute(0, 3, 1, 2).contiguous() # added0510 to avoid nan
+    #         y_row = scan_rowcol(
+    #             x,
+    #             proj_weight = self.x_proj_weight.view(4, -1, D)[:2].contiguous(), 
+    #             proj_bias = (x_proj_bias.view(4, -1)[:2].contiguous() if x_proj_bias is not None else None),
+    #             dt_weight = self.dt_projs_weight.view(4, D, -1)[:2].contiguous(),
+    #             dt_bias = (self.dt_projs_bias.view(4, -1)[:2].contiguous() if self.dt_projs_bias is not None else None),
+    #             _As = As[:2].contiguous().view(-1, N),
+    #             _Ds = self.Ds.view(4, -1)[:2].contiguous().view(-1),
+    #             width=True,
+    #         ).view(B, H, 2, -1, W).sum(dim=2).permute(0, 2, 1, 3) # (B,C,H,W)
+    #         y_row = F.layer_norm(y_row.permute(0, 2, 3, 1), normalized_shape=(int(y_row.shape[1]),)).permute(0, 3, 1, 2).contiguous() # added0510 to avoid nan
+    #         y_col = scan_rowcol(
+    #             y_row,
+    #             proj_weight = self.x_proj_weight.view(4, -1, D)[2:].contiguous().to(y_row.dtype), 
+    #             proj_bias = (x_proj_bias.view(4, -1)[2:].contiguous().to(y_row.dtype) if x_proj_bias is not None else None),
+    #             dt_weight = self.dt_projs_weight.view(4, D, -1)[2:].contiguous().to(y_row.dtype),
+    #             dt_bias = (self.dt_projs_bias.view(4, -1)[2:].contiguous().to(y_row.dtype) if self.dt_projs_bias is not None else None),
+    #             _As = As[2:].contiguous().view(-1, N),
+    #             _Ds = self.Ds.view(4, -1)[2:].contiguous().view(-1),
+    #             width=False,
+    #         ).view(B, W, 2, -1, H).sum(dim=2).permute(0, 2, 3, 1)
+    #         y = y_col
+    #     else:
+    #         x_proj_bias = getattr(self, "x_proj_bias", None)    # None
+    #         # 输入x ([1, 96, 56, 56]-->输出 xs ([1, 4, 96, 3136])
+    #         xs = scan_fn(x, in_channel_first=True, out_channel_first=True, scans=_scan_mode, force_torch=scan_force_torch)
+    #         if no_einsum:  # no_einsum=True
+    #             # xs.view(B, -1, L)结果： (B, 4*C, L) -> (1, 4*96, 3136)
+    #             # x_proj_weight (4 ,8, 96).view(-1, D, 1)-->(32 ,96, 1)
+    #             # xs.view(1, 384, 3136) 拆成 4 组，每组 96 通道
+    #             # x_proj_weight.view(32, 96, 1) 也拆成 4 组，每组 8 个卷积核，大小 (96, 1)
+    #             # F.conv1d input：输入张量，形状为 (batch_size, in_channels, length)，表示输入数据。
+    #             # F.conv1d weight：卷积核，形状为 (out_channels, in_channels/groups, kernel_size)，即滤波器。
+    #             test=self.x_proj_weight.view(-1, D, 1)
+    #             x_dbl = F.conv1d(xs.view(B, -1, L), self.x_proj_weight.view(-1, D, 1), bias=(x_proj_bias.view(-1) if x_proj_bias is not None else None), groups=K)
+    #             # x_dbl (1, 32, 3136)
+    #             # dts torch.Size([1, 4, 6, 3136])
+    #             # Bs  torch.Size([1, 4, 1, 3136])
+    #             # Cs  torch.Size([1, 4, 1, 3136])
+    #             dts, Bs, Cs = torch.split(x_dbl.view(B, K, -1, L), [R, N, N], dim=2)
+    #             # dt_projs_weight torch.Size([4, 96, 6])
+    #             if hasattr(self, "dt_projs_weight"):
+    #                 dts = F.conv1d(dts.contiguous().view(B, -1, L), self.dt_projs_weight.view(K * D, -1, 1), groups=K)
+    #             # dts torch.Size([1, 384, 3136])
+    #         else:
+    #             x_dbl = torch.einsum("b k d l, k c d -> b k c l", xs, self.x_proj_weight)
+    #             if x_proj_bias is not None:
+    #                 x_dbl = x_dbl + x_proj_bias.view(1, K, -1, 1)
+    #             dts, Bs, Cs = torch.split(x_dbl, [R, N, N], dim=2)
+    #             if hasattr(self, "dt_projs_weight"):
+    #                 dts = torch.einsum("b k r l, k d r -> b k d l", dts, self.dt_projs_weight)
+
+    #         xs = xs.view(B, -1, L)                                      # torch.Size([1, 384, 3136])
+    #         dts = dts.contiguous().view(B, -1, L)                       # torch.Size([1, 384, 3136])
+    #         As = -self.A1_logs.to(torch.float).exp() # (k * c, d_state)  # torch.Size([384, 1])
+    #         Ds = self.Ds1.to(torch.float) # (K * c)                      # torch.Size([384])
+    #         Bs = Bs.contiguous().view(B, K, N, L)                       # torch.Size([1, 4, 1, 3136])
+    #         Cs = Cs.contiguous().view(B, K, N, L)                       # torch.Size([1, 4, 1, 3136])
+    #         # dt_projs_bias torch.Size([4, 96])
+    #         delta_bias = self.dt1_projs_bias.view(-1).to(torch.float)    # torch.Size([384])
+
+    #         # force_fp32=False
+    #         if force_fp32:
+    #             xs, dts, Bs, Cs = to_fp32(xs, dts, Bs, Cs)
+    #         # ys=torch.Size([1, 384, 3136]).view(B, K, -1, H, W)=(1,4,96,56,56)
+    #         ys: torch.Tensor = selective_scan(
+    #             xs, dts, As, Bs, Cs, Ds, delta_bias, delta_softplus
+    #         ).view(B, K, -1, H, W)
+            
+    #         y: torch.Tensor = merge_fn(ys, in_channel_first=True, out_channel_first=True, scans=_scan_mode, force_torch=scan_force_torch)
+
+    #         if getattr(self, "__DEBUG__", False):
+    #             setattr(self, "__data__", dict(
+    #                 A_logs=self.A_logs, Bs=Bs, Cs=Cs, Ds=Ds,
+    #                 us=xs, dts=dts, delta_bias=delta_bias,
+    #                 ys=ys, y=y, H=H, W=W,
+    #             ))
+
+    #     y = y.view(B, -1, H, W)
+    #     if not channel_first:
+    #         y = y.view(B, -1, H * W).transpose(dim0=1, dim1=2).contiguous().view(B, H, W, -1) # (B, L, C)
+    #     y = out_norm(y)
+
+    #     return y.to(x.dtype)
 
     def forwardv2(self, x: torch.Tensor, **kwargs):
 
@@ -742,9 +923,9 @@ class SS2Dv2:
         if self.with_dconv:
             x = self.conv2d(x) # (b, d_inner, h, w)
         x = self.act(x)        # SiLU
-        y = self.forward_core(x)
-        y = self.out_act(y)    # nn.Identity()
-        y = self.out_norm(y)   # LN
+        # y = self.forward_core(x)
+        y = self.out_act(x)    # nn.Identity()
+        # y = self.out_norm(y)   # LN
         if not self.disable_z:
             y = y * z
         # 通道由d_inner变成d_model，其他大小不变，Linear2D

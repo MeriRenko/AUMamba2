@@ -62,7 +62,7 @@ def parse_option():
 
     # easy config modification
     parser.add_argument('--batch-size', type=int, help="batch size for single GPU")
-    parser.add_argument('--data-path', type=str, default="BP4D", help='path to dataset')
+    parser.add_argument('--data-path', type=str, default="/root/media_ssd/ssd/AUTTT/classification/dataset/ImageNet_ILSVRC2012", help='path to dataset')
     parser.add_argument('--zip', action='store_true', help='use zipped dataset instead of folder dataset')
     parser.add_argument('--cache-mode', type=str, default='part', choices=['no', 'full', 'part'],
                         help='no: no cache, '
@@ -106,7 +106,9 @@ def main(config, args):
                 project="AUStudy",          # 项目名称
                 entity="ly153496-tianjin-university",
                 name=f"{config.OUTPUT}",               # 实验名称
-                config=config                         # 记录超参数配置
+                id="jdpo5huq", 
+                resume="allow"
+                #config=config                         # 记录超参数配置
             )
     dataset_train, dataset_val, data_loader_train, data_loader_val, mixup_fn = build_loader(config)
 
@@ -197,6 +199,7 @@ def main(config, args):
     # 加载 checkpoint
     if config.MODEL.RESUME:
         # 调用 load_checkpoint_ema() 加载模型、优化器、学习率调度器等状态
+        # 主进程恢复 checkpoint
         max_accuracy, max_accuracy_ema = load_checkpoint_ema(config, model_without_ddp, optimizer, lr_scheduler, loss_scaler, logger, model_ema)
         # 在 data_loader_val 上进行验证，计算模型准确率 (acc1, acc5)。
         acc1, acc5, loss = validate(config, data_loader_val, model)
@@ -211,8 +214,8 @@ def main(config, args):
     if config.MODEL.PRETRAINED and (not config.MODEL.RESUME):
         load_pretrained_ema(config, model_without_ddp, logger, model_ema)
         # skip first validate
-        # acc1, acc5, loss = validate(config, data_loader_val, model)
-        # logger.info(f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%")
+        acc1, acc5, loss = validate(config, data_loader_val, model)
+        logger.info(f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%")
         # 如果 model_ema 可用，进行评估
         if model_ema is not None:
             acc1_ema, acc5_ema, loss_ema = validate(config, data_loader_val, model_ema.ema)
@@ -243,8 +246,8 @@ def main(config, args):
 
         # new_mixup_alpha = config.AUG.MIXUP * (1  - (epoch+1) / (config.TRAIN.EPOCHS-config.TRAIN.START_EPOCH))
         # mixup_fn.update_params(mixup_alpha=new_mixup_alpha)
-
-        train_one_epoch(config, model, criterion, data_loader_train, optimizer, epoch, mixup_fn, lr_scheduler, loss_scaler, model_ema, criterion_mse=criterion_mse)
+        # criterion_mse=criterion_mse
+        train_one_epoch(config, model, criterion, data_loader_train, optimizer, epoch, mixup_fn, lr_scheduler, loss_scaler, model_ema)
 
         acc1, acc5, loss = validate(config, data_loader_val, model)
 
@@ -270,7 +273,7 @@ def main(config, args):
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     logger.info('Training time {}'.format(total_time_str))
 
-def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mixup_fn, lr_scheduler, loss_scaler, model_ema=None, model_time_warmup=50, criterion_mse=None):
+def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mixup_fn, lr_scheduler, loss_scaler, model_ema=None, model_time_warmup=50):
     model.train()
     optimizer.zero_grad()
 
@@ -284,18 +287,18 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
 
     start = time.time()
     end = time.time()
-    for idx, (samples, land, biocular, targets) in enumerate(data_loader):
+    for idx, (samples, targets) in enumerate(data_loader):
         torch.cuda.reset_peak_memory_stats()
         samples = samples.cuda(non_blocking=True)
-        land = land.to(samples.device, dtype=samples.dtype, non_blocking=True)
-        biocular = biocular.to(samples.device, dtype=samples.dtype, non_blocking=True)
+        # land = land.to(samples.device, dtype=samples.dtype, non_blocking=True)
+        # biocular = biocular.to(samples.device, dtype=samples.dtype, non_blocking=True)
         targets = targets.cuda(non_blocking=True)
 
         if mixup_fn is not None:
             samples, targets = mixup_fn(samples, targets)
 
         data_time.update(time.time() - end)
-        with torch.cuda.amp.autocast(enabled=config.AMP_ENABLE):
+        with torch.amp.autocast('cuda',enabled=config.AMP_ENABLE):
             outputs = model(samples)
 
         loss = criterion(outputs, targets)
@@ -382,7 +385,7 @@ def validate(config, data_loader, model):
         target = target.cuda(non_blocking=True)
 
         # compute output
-        with torch.cuda.amp.autocast(enabled=config.AMP_ENABLE):
+        with torch.amp.autocast('cuda',enabled=config.AMP_ENABLE):
             output = model(images)
 
         # measure accuracy and record loss
@@ -436,6 +439,8 @@ def throughput(data_loader, model, logger):
 
 if __name__ == '__main__':
     args, config = parse_option()
+    os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+    os.environ['TORCH_USE_RTLD_GLOBAL'] = '1'
     # 由于 Apex AMP 已被废弃，所以建议改用 PyTorch 内置的 AMP
     if config.AMP_OPT_LEVEL:
         print("[warning] Apex amp has been deprecated, please use pytorch amp instead!")

@@ -1,0 +1,29 @@
+MODEL:
+  TYPE: vssm
+  NAME: vssm1_tiny_0230s
+  DROP_PATH_RATE: 0.2
+  NUM_CLASSES: 1000
+  VSSM:
+    EMBED_DIM: 96
+    DEPTHS: [ 2, 2, 8, 2 ]
+    SSM_D_STATE: 1
+    SSM_DT_RANK: "auto"
+    SSM_RATIO: 1.0
+    SSM_CONV: 3
+    SSM_CONV_BIAS: false
+    SSM_FORWARDTYPE: "v05_noz" # v3_noz
+    MLP_RATIO: 4.0
+    DOWNSAMPLE: "v3"
+    PATCHEMBED: "v2"
+    NORM_LAYER: "ln2d"
+    SCAN: "none"
+TRAIN: 
+    AUTO_RESUME: True
+TEST:
+    CROP: True
+DATA:
+    BATCH_SIZE: 64
+    NUM_WORKERS: 8
+    DATA_PATH: "/root/media_ssd/ssd/AUTTT/classification/dataset/ImageNet_ILSVRC2012"
+    REIMG_SIZE: 224
+OUTPUT: "/output"

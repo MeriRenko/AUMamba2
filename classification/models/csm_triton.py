@@ -647,7 +647,7 @@ def scan_fn(x: torch.Tensor, in_channel_first=True, out_channel_first=True, one_
     # x: (B, C, H, W) | (B, H, W, C) | (B, 4, C, H, W) | (B, H, W, 4, C)
     # y: (B, 4, C, L) | (B, L, 4, C)
     # scans: 0: cross scan; 1 unidirectional; 2: bidirectional;
-    # WITH_TRITON=False
+    WITH_TRITON=False
     CSF = CrossScanTritonF if WITH_TRITON and x.is_cuda and (not force_torch) else ScanF  #CrossScanTritonF
     with torch.cuda.device(x.device):
         return CSF.apply(x, in_channel_first, out_channel_first, one_by_one, scans)
@@ -658,7 +658,7 @@ def merge_fn(y: torch.Tensor, in_channel_first=True, out_channel_first=True, one
     # y: (B, 4, C, L) | (B, L, 4, C)
     # x: (B, C, H * W) | (B, H * W, C) | (B, 4, C, H * W) | (B, H * W, 4, C)
     # scans: 0: cross scan; 1 unidirectional; 2: bidirectional;
-    # WITH_TRITON=False
+    WITH_TRITON=False
     CMF = CrossMergeTritonF if WITH_TRITON and y.is_cuda and (not force_torch) else MergeF
     with torch.cuda.device(y.device):
         return CMF.apply(y, in_channel_first, out_channel_first, one_by_one, scans)
